@@ -1,7 +1,7 @@
 import type { Route } from "./+types/home";
-import React, { useState, useEffect } from 'react';
-import { ethers } from 'ethers';
-import TodoListABI from '../../abi/todolist.abi.json';
+import React, { useState, useEffect } from "react";
+import { BrowserProvider, Contract } from "ethers";
+import TodoListABI from "../../abi/todolist.abi.json";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -9,7 +9,6 @@ export function meta({}: Route.MetaArgs) {
     { name: "description", content: "Welcome to React Router!" },
   ];
 }
-
 
 interface Task {
   id: number;
@@ -19,96 +18,92 @@ interface Task {
 
 const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [newTask, setNewTask] = useState<string>('');
-  const [contract, setContract] = useState<ethers.Contract | null>(null);
-  const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
+  const [newTask, setNewTask] = useState<string>("");
+  const [contract, setContract] = useState<Contract | null>(null);
+  const [provider, setProvider] = useState<BrowserProvider | null>(null);
 
   useEffect(() => {
-    const loadProvider = async () => {
-      if (typeof window.ethereum !== 'undefined') {
+    const loadProviderAndContract = async () => {
+      if (typeof window.ethereum !== "undefined") {
         try {
-          await window.ethereum.request({ method: 'eth_requestAccounts' }); 
-          const web3Provider = new ethers.BrowserProvider(window.ethereum);
-          setProvider(web3Provider);
-        } catch (error) {
-          console.error('Error creating Web3 provider:', error);
-        }
-      } else {
-        console.error('Metamask not detected. Please install Metamask.');
-      }
-    };
-
-    loadProvider();
-
-    const loadBlockchainData = async () => {
-      if (window.ethereum) {
-        try {
-          await window.ethereum.request({ method: 'eth_requestAccounts' }); 
-          await provider?.send('eth_requestAccounts', []);
-          const signer = await provider?.getSigner();
-          const todoContract = new ethers.Contract(
-            import.meta.env.VITE_CONTRACT_ADDRESS as string,
+          const web3Provider = new BrowserProvider(window.ethereum);
+          const signer = await web3Provider.getSigner();
+          const todoContract = new Contract(
+            import.meta.env.VITE_CONTRACT_ADDRESS,
             TodoListABI,
-            signer,
+            signer
           );
 
+          setProvider(web3Provider);
           setContract(todoContract);
 
-          const taskCount = await provider?.send('eth_call', [
-            {
-              to: import.meta.env.VITE_CONTRACT_ADDRESS,
-              data: todoContract.interface.encodeFunctionData('taskCount', []),
-            },
-          ]);
-          // const taskCount = await todoContract.taskCount();
+          const taskCount = await todoContract.taskCount();
           const loadedTasks: Task[] = [];
-
-          for (let i = 0; i < parseInt(taskCount); i++) {
-            const task = await provider?.send('eth_call', [
-              {
-                to: import.meta.env.VITE_CONTRACT_ADDRESS,
-                data: todoContract.interface.encodeFunctionData('tasks', [i]),
-              },
-            ]);
-            // const task = await todoContract.tasks(i);
+          for (let i = 0; i < taskCount.toNumber(); i++) {
+            const task = await todoContract.tasks(i);
             loadedTasks.push({
               id: task.id.toNumber(),
               content: task.content,
               completed: task.completed,
             });
           }
-
           setTasks(loadedTasks);
         } catch (error) {
-          console.error('Error loading blockchain data:', error);
+          console.error("Error loading provider or contract:", error);
         }
       } else {
-        alert('Please install Metamask!');
+        alert("Please install Metamask!");
       }
     };
 
-    loadBlockchainData();
+    loadProviderAndContract();
   }, []);
 
   const addTask = async () => {
-    const accounts = await provider?.send('eth_requestAccounts', []);
-    const nonce = await provider?.send('eth_getTransactionCount', [accounts[0], 'latest']);
-    console.log(nonce);
-    if (contract) {
-      try {
-        const tx = await provider?.send('eth_sendTransaction', [
-          {
-            from: accounts[0],
-            to: import.meta.env.VITE_CONTRACT_ADDRESS,
-            nonce,
-            data: contract.interface.encodeFunctionData('createTask', [newTask]),
-          },
-        ]);
-        // const tx = await contract.createTask(newTask);
-        setNewTask('');
-      } catch (error) {
-        console.error('Error adding task:', error);
+    if (!provider || !contract) {
+      console.error("Provider or contract is not initialized");
+      return;
+    }
+
+    try {
+      // Get the sender's account
+      const accounts = await provider.send("eth_requestAccounts", []);
+      const sender = accounts[0];
+
+      // Get the current nonce for the sender's account
+      const nonce = await provider.send("eth_getTransactionCount", [
+        sender,
+        "latest", // Use "latest" to get the current nonce
+      ]);
+
+      // Send the transaction with the nonce
+      const tx = await provider.send("eth_sendTransaction", [
+        {
+          from: sender,
+          to: import.meta.env.VITE_CONTRACT_ADDRESS,
+          nonce, // Explicitly set the nonce
+          data: contract.interface.encodeFunctionData("createTask", [newTask]),
+        },
+      ]);
+
+      // Wait for the transaction to be mined
+      console.log("Transaction sent:", tx);
+      setNewTask(""); // Clear the input after sending the transaction
+
+      // Reload tasks (optional, to reflect changes immediately)
+      const taskCount = await contract.taskCount();
+      const loadedTasks: Task[] = [];
+      for (let i = 0; i < taskCount; i++) {
+        const task = await contract.tasks(i);
+        loadedTasks.push({
+          id: task.id.toNumber(),
+          content: task.content,
+          completed: task.completed,
+        });
       }
+      setTasks(loadedTasks);
+    } catch (error) {
+      console.error("Error adding task:", error);
     }
   };
 
@@ -118,7 +113,7 @@ const App: React.FC = () => {
         const tx = await contract.toggleComplete(id);
         await tx.wait(); // Wait for the transaction to be mined
       } catch (error) {
-        console.error('Error toggling task completion:', error);
+        console.error("Error toggling task completion:", error);
       }
     }
   };
@@ -135,7 +130,7 @@ const App: React.FC = () => {
       <ul>
         {tasks.map((task) => (
           <li key={task.id}>
-            {task.content} - {task.completed ? 'Completed' : 'Incomplete'}
+            {task.content} - {task.completed ? "Completed" : "Incomplete"}
             <button onClick={() => toggleTaskCompletion(task.id)}>
               Toggle
             </button>
@@ -147,4 +142,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-
