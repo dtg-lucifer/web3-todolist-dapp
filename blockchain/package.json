@@ -1,0 +1,19 @@
+{
+  "name": "eth-todo-demo",
+  "version": "1.0.0",
+  "main": "scripts/deploy.js",
+  "scripts": {
+    "deploy": "node scripts/deploy.js",
+    "compile": "npx hardhat compile",
+    "testnet": "npx hardhat node"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@nomiclabs/hardhat-ethers": "^2.2.3",
+    "ethers": "^5.7.2",
+    "hardhat": "^2.22.17"
+  }
+}
