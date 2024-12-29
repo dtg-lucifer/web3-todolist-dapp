@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "main": "scripts/deploy.js",
   "scripts": {
-    "deploy": "node scripts/deploy.js",
+    "deploy": "npx hardhat run scripts/deploy.js --network localhost",
     "compile": "npx hardhat compile",
-    "testnet": "npx hardhat node"
+    "testnet": "npx hardhat node --verbose"
   },
   "keywords": [],
   "author": "",

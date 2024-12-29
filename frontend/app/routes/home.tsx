@@ -10,14 +10,8 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-interface Task {
-  id: number;
-  content: string;
-  completed: boolean;
-}
-
 const App: React.FC = () => {
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<string[]>([]);
   const [newTask, setNewTask] = useState<string>("");
   const [contract, setContract] = useState<Contract | null>(null);
   const [provider, setProvider] = useState<BrowserProvider | null>(null);
@@ -37,17 +31,19 @@ const App: React.FC = () => {
           setProvider(web3Provider);
           setContract(todoContract);
 
-          const taskCount = await todoContract.taskCount();
-          const loadedTasks: Task[] = [];
-          for (let i = 0; i < taskCount.toNumber(); i++) {
-            const task = await todoContract.tasks(i);
-            loadedTasks.push({
-              id: task.id.toNumber(),
-              content: task.content,
-              completed: task.completed,
-            });
-          }
+          // const taskCount = await todoContract.taskCount();
+          // const loadedTasks: Task[] = [];
+          // for (let i = 0; i < taskCount; i++) {
+          //   const task = await todoContract.tasks(i);
+          //   loadedTasks.push({
+          //     id: task.id,
+          //     content: task.content,
+          //     completed: task.completed,
+          //   });
+          // }
+          const loadedTasks = await todoContract.getAllTasks();
           setTasks(loadedTasks);
+          console.log("Tasks loaded:", loadedTasks);
         } catch (error) {
           console.error("Error loading provider or contract:", error);
         }
@@ -66,42 +62,32 @@ const App: React.FC = () => {
     }
 
     try {
-      // Get the sender's account
       const accounts = await provider.send("eth_requestAccounts", []);
       const sender = accounts[0];
 
-      // Get the current nonce for the sender's account
       const nonce = await provider.send("eth_getTransactionCount", [
         sender,
         "latest", // Use "latest" to get the current nonce
       ]);
 
-      // Send the transaction with the nonce
-      const tx = await provider.send("eth_sendTransaction", [
-        {
-          from: sender,
-          to: import.meta.env.VITE_CONTRACT_ADDRESS,
-          nonce, // Explicitly set the nonce
-          data: contract.interface.encodeFunctionData("createTask", [newTask]),
-        },
-      ]);
+      const tx = await contract.createTask(newTask);
 
-      // Wait for the transaction to be mined
       console.log("Transaction sent:", tx);
       setNewTask(""); // Clear the input after sending the transaction
 
-      // Reload tasks (optional, to reflect changes immediately)
-      const taskCount = await contract.taskCount();
-      const loadedTasks: Task[] = [];
-      for (let i = 0; i < taskCount; i++) {
-        const task = await contract.tasks(i);
-        loadedTasks.push({
-          id: task.id.toNumber(),
-          content: task.content,
-          completed: task.completed,
-        });
-      }
+      // const taskCount = await contract.taskCount();
+      // const loadedTasks: Task[] = [];
+      // for (let i = 0; i < taskCount; i++) {
+      //   const task = await contract.tasks(i);
+      //   loadedTasks.push({
+      //     id: task.id,
+      //     content: task.content,
+      //     completed: task.completed,
+      //   });
+      // }
+      const loadedTasks = await contract.getAllTasks();
       setTasks(loadedTasks);
+      console.log("Loaded tasks: ", loadedTasks);
     } catch (error) {
       console.error("Error adding task:", error);
     }
@@ -112,6 +98,7 @@ const App: React.FC = () => {
       try {
         const tx = await contract.toggleComplete(id);
         await tx.wait(); // Wait for the transaction to be mined
+        console.log("Transaction mined:", tx);
       } catch (error) {
         console.error("Error toggling task completion:", error);
       }
@@ -119,7 +106,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div>
+    <div className="bg-gray-800">
       <h1>Blockchain Todo App</h1>
       <input
         type="text"
@@ -129,9 +116,17 @@ const App: React.FC = () => {
       <button onClick={addTask}>Add Task</button>
       <ul>
         {tasks.map((task) => (
-          <li key={task.id}>
-            {task.content} - {task.completed ? "Completed" : "Incomplete"}
-            <button onClick={() => toggleTaskCompletion(task.id)}>
+          <li key={task.toString().split(",")[0]}>
+            {task.toString().split(",")[1]} -{" "}
+            {parseInt(task.toString().split(",")[2]) > 0
+              ? "Completed"
+              : "Incomplete"}
+            {" - "}
+            <button
+              onClick={() =>
+                toggleTaskCompletion(parseInt(task.toString().split(",")[0]))
+              }
+            >
               Toggle
             </button>
           </li>

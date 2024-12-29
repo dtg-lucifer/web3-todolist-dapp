@@ -2,38 +2,45 @@
 pragma solidity ^0.8.0;
 
 contract TodoList {
+  enum TaskStatus {Pending, Finished}
+  address owner;
+  
   struct Task {
     uint256 id;
-    string content;
-    bool completed;
+    string desc;
+    TaskStatus status;
   }
 
-  mapping(uint256 => Task) public tasks;
+  Task[] public tasks;
   uint256 public taskCount;
 
-  event TaskCreated(uint256 id, string content, bool completed);
-  event TaskCompleted(uint256 id, bool completed);
-
-  function createTask(string memory _content) public {
-    require(bytes(_content).length > 0, "Task content cannot be empty");
-    tasks[taskCount] = Task(taskCount, _content, false);
-    emit TaskCreated(taskCount, _content, false);
-    taskCount++;
+  constructor() {
+    owner = msg.sender;
   }
 
-  function toggleComplete(uint256 _id) public {
-    require(_id < taskCount, "Task ID does not exist");
-    Task storage task = tasks[_id];
-    task.completed = !task.completed;
-    emit TaskCompleted(_id, task.completed);
+  modifier onlyOwner {
+    require(msg.sender == owner, "Not owner");
+    _;
+  }
+
+  function createTask(string memory _desc) public onlyOwner {
+    taskCount++;
+    tasks.push(Task(taskCount, _desc, TaskStatus.Pending));
+  }
+
+  function toggleComplete(uint256 id) public onlyOwner {
+    require(id < 0, "Id cannot be less than 0");
+    require(id > taskCount, "No tasks added with this id");
+    tasks[id].status= TaskStatus.Finished;
   }
 
   function getAllTasks() public view returns (Task[] memory) {
-    Task[] memory allTasks = new Task[](taskCount);
-    for (uint256 i = 0; i < taskCount; i++) {
-        Task storage task = tasks[i];
-        allTasks[i] = task;
-    }
-    return allTasks;
+    return tasks;
+  }
+
+  function getTask(uint256 id) public view returns (string memory, TaskStatus) {
+    require(id < 0, "Id cannot be less than 0");
+    require(id > taskCount, "No tasks added with this id");
+    return(tasks[id].desc, tasks[id].status);
   }
 }
